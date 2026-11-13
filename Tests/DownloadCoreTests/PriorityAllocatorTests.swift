@@ -59,9 +59,9 @@ final class PriorityAllocatorTests: XCTestCase {
 
     func testUserCapAppliesWithoutPriorities() {
         let allocator = PriorityAllocator()
-        let caps = allocator.update([.init(id: a, priority: .normal, speed: 1 * mb, userCap: 512 * 1024)],
+        let caps = allocator.update([.init(id: a, priority: .normal, speed: 1 * mb, userCap: 512.0 * 1024)],
                                     globalLimit: 0)
-        XCTAssertEqual(caps[a], 512 * 1024)
+        XCTAssertEqual(caps[a], 512.0 * 1024)
     }
 
     func testHighPriorityGetsTheBiggerShare() {
@@ -91,9 +91,9 @@ final class PriorityAllocatorTests: XCTestCase {
     func testLowPriorityNeverStarves() {
         let allocator = PriorityAllocator()
         let caps = allocator.update([
-            .init(id: a, priority: .high, speed: 100 * 1024),
+            .init(id: a, priority: .high, speed: 100.0 * 1024),
             .init(id: b, priority: .low, speed: 0),
-        ], globalLimit: 10 * 1024)
+        ], globalLimit: 10.0 * 1024)
         XCTAssertGreaterThanOrEqual(caps[b]!, PriorityAllocator.floor)
     }
 
