@@ -563,9 +563,9 @@ private struct AboutSettings: View {
             }
         }
 
-        SettingsGroup(title: L("Proyek")) {
-            SettingsRow(title: L("Kode sumber dan rilis"), detail: "github.com/\(UpdateChecker.repo)", divider: false) { // l10n-ignore
-                Button(L("Buka GitHub")) { NSWorkspace.shared.open(URL(string: "https://github.com/\(UpdateChecker.repo)")!) }
+        SettingsGroup(title: L("Tentang pengembang")) {
+            SettingsRow(title: L("Dibuat oleh RakitLab"), detail: "rakitlab.space", divider: false) { // l10n-ignore
+                Button(L("Kunjungi situs")) { NSWorkspace.shared.open(URL(string: "https://rakitlab.space")!) }
                     .buttonStyle(SecondaryButtonStyle())
             }
         }
