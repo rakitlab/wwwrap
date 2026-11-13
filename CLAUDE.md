@@ -33,7 +33,7 @@ Detail arsitektur: `ARCHITECTURE.md`. Ringkasan pengguna: `README.md`.
 - `Sources/mdl-bench`: CLI benchmark throughput/CPU. `Tests/DownloadCoreTests`: 43 tes (server range lokal).
 
 ## Cara kerja dari sesi Claude (penting)
-- Workspace Claude = Linux, **tidak bisa compile Swift**. Semua build/tes lewat GitHub Actions (macos-14).
+- Workspace Claude = Linux, **tidak bisa compile Swift**. Semua build/tes lewat GitHub Actions (macos-15; macos-14 sudah tidak didukung per Nov 2026).
 - Log Actions & artifact **tidak bisa diunduh** dari proxy. Workflow sengaja menulis hasil sebagai **annotations**
   (`gh api repos/rakitlab/wwwrap/check-runs/<job>/annotations`) — error compiler, hasil tes, smoke test.
 - Screenshot UI: step CI mem-push PNG ke branch `ci-screenshots` → `git fetch origin ci-screenshots`.
