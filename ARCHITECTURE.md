@@ -79,12 +79,16 @@ Each running download also gets its own `BandwidthLimiter` (`Configuration.itemL
 `DownloadManager.rebalance()` asks `PriorityAllocator` for each download's cap and applies it with
 `retune` (changes the rate without releasing waiters, so frequent retuning can't skip the cap).
 
-`PriorityAllocator`: weights high/normal/low = 3/2/1. Downloads of the highest priority present are
-never capped by priority; each lower one is capped at its weighted share of the budget plus what the
-others leave unused (so a slow server on the important download doesn't waste the line), moving 30 %
-toward the target per update, never below 64 KB/s. Budget = the global limit, or else the highest
-recent total speed (decaying, ~70 s half-life). Same priority everywhere → no priority caps. The
-user's per-file cap (`speedLimitKB`) always applies. The queue starts highest priority first, then
+`PriorityAllocator`: weights high/normal/low = 3/2/1. The line's capacity is unknown (Starlink
+swings), so caps are relative to the top downloads: downloads of the highest priority present are
+never capped by priority; each lower one is capped at `top speed per weight × its weight × boost`
+(boost 1 = exactly 3:2:1, and stable). Every 4 s a download pressing against its cap gets boost
+×1.5; if the top downloads then slow by > 7 % they were competing → boost ÷2 and hold 3 windows,
+otherwise the top is server-limited and the others keep the room (no wasted line). Floor 64 KB/s.
+Same priority everywhere → no priority caps. The user's per-file cap (`speedLimitKB`) always
+applies. Tuned with a noisy simulation (±30 % per sample): ratio holds within ~5 %, slow-server
+case still fills the line. A capacity-estimate design was tried first and ratcheted down.
+The queue starts highest priority first, then
 oldest; "Mulai sekarang" starts a download beyond the concurrent-download setting.
 
 ## Localization

@@ -13,21 +13,25 @@ public enum DownloadPriority: Int, Codable, CaseIterable, Comparable, Sendable {
 
 /// Splits bandwidth between parallel downloads by priority and applies per-download caps.
 ///
-/// Rules:
-/// - Downloads of the highest priority present are never slowed by priority (only by their own
-///   cap and the global limit), so the top download always gets everything it can take.
-/// - Every lower-priority download is capped at its weighted share of the budget
-///   (`budget × weight / Σweights`), plus whatever the others leave unused. Leftover matters
-///   when the important download is slow because of its *server*: then holding the others
-///   back would only waste the line.
-/// - Caps move toward their target gradually (each update closes 30 % of the gap), because
-///   measured speeds react to a new cap only after a moment.
+/// The line's capacity is unknown (Starlink swings a lot), so instead of dividing a guessed
+/// budget the allocator works *relative to the most important downloads*:
+///
+/// - Downloads of the highest priority present ("top") are never slowed by priority.
+/// - Each lower download is capped at `top speed per weight × its weight × boost`. With
+///   boost 1 that is exactly the 3 : 2 : 1 ratio, and it is stable: if the top download gets
+///   more, the others are allowed more too.
+/// - The boost finds out whether holding a download back actually helps. Every window
+///   (`window` updates) a download that is pressing against its cap gets the boost raised
+///   (×`probeStep`). If the top downloads slow down noticeably in the next window, they were
+///   competing for the line: the boost is halved and stays put for a few windows. If they
+///   don't, the top download is limited by its own server, and the others may keep the room.
+///   So a slow server on the important file never wastes the line.
+/// - A capped download never drops below `floor`, so low priority still makes progress.
 /// - If every running download has the same priority, nothing is capped by priority.
+/// - The user's own per-download cap always applies on top.
 ///
-/// The budget is the global speed limit when one is set, otherwise an estimate of the line's
-/// capacity: the highest total speed seen recently, slowly decaying.
-///
-/// Not thread-safe; owned by the download manager on the main actor.
+/// Call `update` at a steady rate (the app does it twice a second). Not thread-safe; owned by
+/// the download manager on the main actor.
 public final class PriorityAllocator {
     public struct Entry: Equatable {
         public var id: UUID
@@ -45,62 +49,98 @@ public final class PriorityAllocator {
         }
     }
 
-    /// A capped download never drops below this, so low priority still makes progress.
     public static let floor: Double = 64 * 1024
-    /// How fast caps move toward their target per update (0…1).
-    public var smoothing: Double = 0.3
-    /// Per-update decay of the capacity estimate (0.995 at 2 updates/s ≈ 70 s half-life).
-    public var peakDecay: Double = 0.995
+    /// Updates per probe window (8 × 0.5 s = 4 s).
+    public var window = 8
+    public var probeStep = 1.5
+    public var backOff = 2.0
+    /// A drop of the top downloads' speed bigger than this after a probe means contention.
+    public var contentionDrop = 0.07
+    /// Windows to wait after backing off before probing again.
+    public var holdWindows = 3
+    public var maxBoost = 1000.0
 
+    private var boost: [UUID: Double] = [:]
     private var priorityCaps: [UUID: Double] = [:]
-    public private(set) var capacityEstimate: Double = 0
+    private var topSamples: [Double] = []
+    private var previousTop: Double?
+    private var topIDs: Set<UUID> = []
+    private var probing = false
+    private var hold = 0
+    private var updates = 0
 
     public init() {}
 
     /// Returns the cap for each entry in bytes per second (0 = uncapped).
-    /// - Parameter globalLimit: the global cap in bytes per second, 0 when unlimited.
-    public func update(_ entries: [Entry], globalLimit: Double) -> [UUID: Double] {
-        let total = entries.reduce(0) { $0 + $1.speed }
-        capacityEstimate = max(total, capacityEstimate * peakDecay)
-        let budget = globalLimit > 0 ? globalLimit : capacityEstimate
-
-        let ids = Set(entries.map(\.id))
-        priorityCaps = priorityCaps.filter { ids.contains($0.key) }
-
+    public func update(_ entries: [Entry]) -> [UUID: Double] {
         var result: [UUID: Double] = [:]
         for e in entries { result[e.id] = e.userCap }
 
         guard let top = entries.map(\.priority).max(),
-              entries.contains(where: { $0.priority != top }),
-              budget > 0 else {
-            priorityCaps.removeAll()
+              entries.contains(where: { $0.priority != top }) else {
+            reset()
             return result
         }
 
-        let weightSum = entries.reduce(0) { $0 + $1.priority.weight }
-        func share(_ e: Entry) -> Double { budget * e.priority.weight / weightSum }
-        // What downloads leave on the table, including bandwidth a download can't use because
-        // of its own cap (10 % tolerance so normal jitter isn't "spare").
-        let spare = entries.reduce(0) { $0 + max(0, share($1) - $1.speed * 1.1) }
+        let topEntries = entries.filter { $0.priority == top }
         let lower = entries.filter { $0.priority != top }
-        let lowerWeight = lower.reduce(0) { $0 + $1.priority.weight }
+        let currentTopIDs = Set(topEntries.map(\.id))
+        if currentTopIDs != topIDs {
+            // Different top downloads: earlier measurements say nothing about them.
+            topIDs = currentTopIDs
+            topSamples.removeAll()
+            previousTop = nil
+            probing = false
+        }
+        let lowerIDs = Set(lower.map(\.id))
+        boost = boost.filter { lowerIDs.contains($0.key) }
 
+        let topSpeed = topEntries.reduce(0) { $0 + $1.speed }
+        let topWeight = topEntries.reduce(0) { $0 + $1.priority.weight }
+        topSamples.append(topSpeed)
+        updates += 1
+
+        if updates % max(1, window) == 0, !topSamples.isEmpty {
+            let average = topSamples.reduce(0, +) / Double(topSamples.count)
+            topSamples.removeAll()
+            if probing, let previous = previousTop, average < previous * (1 - contentionDrop) {
+                for e in lower { boost[e.id] = max(1, (boost[e.id] ?? 1) / backOff) }
+                hold = holdWindows
+            } else if hold > 0 {
+                hold -= 1
+            }
+            probing = false
+            if hold == 0 {
+                // Probe only downloads that are actually held back by their priority cap.
+                let pressing = lower.filter { e in
+                    guard let cap = priorityCaps[e.id] else { return false }
+                    let byPriority = e.userCap == 0 || cap < e.userCap
+                    return byPriority && e.speed >= 0.85 * cap
+                }
+                for e in pressing { boost[e.id] = min(maxBoost, (boost[e.id] ?? 1) * probeStep) }
+                probing = !pressing.isEmpty
+            }
+            previousTop = average
+        }
+
+        var caps: [UUID: Double] = [:]
         for e in lower {
-            let target = share(e) + spare * e.priority.weight / lowerWeight
-            let previous = priorityCaps[e.id] ?? share(e)
-            var cap = previous + (target - previous) * smoothing
-            cap = max(Self.floor, cap)
-            priorityCaps[e.id] = cap
+            let cap = max(Self.floor, topSpeed / max(1, topWeight) * e.priority.weight * (boost[e.id] ?? 1))
+            caps[e.id] = cap
             result[e.id] = e.userCap > 0 ? min(e.userCap, cap) : cap
         }
-        // Top-priority downloads: only their own cap applies.
-        for e in entries where e.priority == top { priorityCaps[e.id] = nil }
+        priorityCaps = caps
         return result
     }
 
-    /// Forget everything (e.g. after all downloads stopped).
+    /// Forget everything (e.g. once downloads no longer have mixed priorities).
     public func reset() {
+        boost.removeAll()
         priorityCaps.removeAll()
-        capacityEstimate = 0
+        topSamples.removeAll()
+        previousTop = nil
+        topIDs.removeAll()
+        probing = false
+        hold = 0
     }
 }

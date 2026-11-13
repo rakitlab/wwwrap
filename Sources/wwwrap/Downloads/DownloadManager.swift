@@ -617,7 +617,7 @@ final class DownloadManager: ObservableObject, DownloadDispatching {
                          userCap: Double(items[i].speedLimitKB) * 1024)
         }
         guard !entries.isEmpty else { allocator.reset(); return }
-        let caps = allocator.update(entries, globalLimit: Double(limiter.limit))
+        let caps = allocator.update(entries)
         for (id, cap) in caps { itemLimiters[id]?.retune(Int64(cap)) }
     }
 
