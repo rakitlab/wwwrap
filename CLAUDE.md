@@ -54,4 +54,9 @@ Detail arsitektur: `ARCHITECTURE.md`. Ringkasan pengguna: `README.md`.
 3. Kandidat fitur: Native Messaging host (Chromium), Safari Web Extension (butuh migrasi ke Xcode project),
    video grabber (yt-dlp), jadwal + tidurkan Mac, ambil semua link dari halaman, deteksi duplikat,
    ekstensi di Chrome Web Store — sudah diusulkan, belum diminta.
+5. **Distribusi berbayar (backlog, Nov 2026)** — pemilik mau mulai jual wwwrap. Cek update (`UpdateChecker`/`Updater`),
+   tombol "Halaman rilis", dan `install.sh` masih mengambil dari GitHub Releases `rakitlab/wwwrap`. Kalau repo
+   dijadikan private, auto-update putus; kalau tetap publik, .dmg bisa diunduh gratis. Rencana: pindahkan feed update
+   + download ke rakitlab.space, digabung dengan sistem lisensi (model harga belum diputuskan). Belum dikerjakan.
+   (About sudah diganti dari link GitHub ke "Tentang pengembang" → rakitlab.space, PR #12.)
 4. Branch sisa yang bisa dihapus pemilik: `probe-drive`, `perf-speed`, `engine-v2`, `drive-folders`.
