@@ -244,7 +244,14 @@
     "Tanda tangan aplikasi baru tidak valid.": "The new app's signature isn't valid.",
     "Tidak ada izin menulis ke %@. Pakai perintah Terminal di bawah.": "No permission to write to %@. Use the Terminal command below.",
     "File update tidak ditemukan di GitHub.": "The update file wasn't found on GitHub.",
-    "MacDownloader sekarang bernama wwwrap. Pengaturan dan riwayat download sudah dipindah.": "MacDownloader is now called wwwrap. Your settings and download history have been moved over."
+    "MacDownloader sekarang bernama wwwrap. Pengaturan dan riwayat download sudah dipindah.": "MacDownloader is now called wwwrap. Your settings and download history have been moved over.",
+    "Tinggi": "High",
+    "Normal": "Normal",
+    "Rendah": "Low",
+    "Tanpa batas": "No limit",
+    "Prioritas": "Priority",
+    "Prioritas: %@": "Priority: %@",
+    "Batas kecepatan file ini": "Speed limit for this file"
   },
   "extension": {
     "Download dengan wwwrap": "Download with wwwrap",

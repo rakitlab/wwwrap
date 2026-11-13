@@ -38,6 +38,24 @@ public final class BandwidthLimiter: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Adjusts the cap for frequent, small corrections (the priority allocator calls this twice
+    /// a second). Unlike `setLimit`, a lower or slightly higher rate keeps the schedule and lets
+    /// current waiters finish their wait, so retuning can't be used to skip the cap. Only a big
+    /// raise (≥ 1.5×) or removing the cap releases waiters, so the new speed applies at once.
+    public func retune(_ bytesPerSecond: Int64) {
+        let new = Double(max(0, bytesPerSecond))
+        lock.lock()
+        defer { lock.unlock() }
+        guard new != rate else { return }
+        if new == 0 || rate == 0 || new >= rate * 1.5 {
+            rate = new
+            tat = Self.now()
+            generation += 1
+        } else {
+            rate = new
+        }
+    }
+
     /// Waits until `bytes` may pass under the current cap. Throws on task cancellation.
     public func acquire(_ bytes: Int) async throws {
         guard bytes > 0 else { return }

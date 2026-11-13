@@ -81,6 +81,9 @@ final class DownloadManager: ObservableObject, DownloadDispatching {
     }
 
     private var transfers: [UUID: ActiveTransfer] = [:]
+    /// Per-download caps (priority share and the user's own limit), retuned on every tick.
+    private var itemLimiters: [UUID: BandwidthLimiter] = [:]
+    private let allocator = PriorityAllocator()
     private var lastSample: [UUID: (bytes: Int64, time: Date)] = [:]
     private var timer: Timer?
     private var tickCount = 0
@@ -261,6 +264,35 @@ final class DownloadManager: ObservableObject, DownloadDispatching {
         schedule()
     }
 
+    /// Starts these downloads right away, even when all download slots are busy.
+    func startNow(_ ids: Set<UUID>) {
+        for id in ids {
+            guard let i = index(id), [.queued, .paused, .failed].contains(items[i].status),
+                  transfers[id] == nil else { continue }
+            if items[i].status != .queued {
+                resume([id])
+                guard let j = index(id), items[j].status == .queued else { continue }
+            }
+            if transfers[id] == nil { start(id) }
+        }
+        save()
+        updateSystemState()
+    }
+
+    func setPriority(_ priority: DownloadPriority, for ids: Set<UUID>) {
+        for id in ids { if let i = index(id) { items[i].priority = priority } }
+        save()
+        rebalance()
+        schedule()
+    }
+
+    /// 0 removes the download's own cap.
+    func setSpeedLimit(kb: Int, for ids: Set<UUID>) {
+        for id in ids { if let i = index(id) { items[i].speedLimitKB = max(0, kb) } }
+        save()
+        rebalance()
+    }
+
     func remove(_ ids: Set<UUID>, deleteFiles: Bool) {
         for id in ids {
             transfers[id]?.task.cancel()
@@ -313,7 +345,10 @@ final class DownloadManager: ObservableObject, DownloadDispatching {
 
     private func schedule() {
         var slots = maxConcurrent - transfers.count
-        for item in items.reversed() where item.status == .queued && slots > 0 { // oldest first
+        // Highest priority first, then oldest first.
+        let queued = items.filter { $0.status == .queued && transfers[$0.id] == nil }
+            .sorted { $0.priority != $1.priority ? $0.priority > $1.priority : $0.addedAt < $1.addedAt }
+        for item in queued where slots > 0 {
             slots -= 1
             start(item.id)
         }
@@ -356,6 +391,9 @@ final class DownloadManager: ObservableObject, DownloadDispatching {
             config.autoScale = defaults.object(forKey: SettingsKey.autoScale) as? Bool ?? true
             config.maxConnections = 32
             config.limiter = limiter
+            let itemLimiter = BandwidthLimiter(bytesPerSecond: Int64(items[i].speedLimitKB) * 1024)
+            itemLimiters[id] = itemLimiter
+            config.itemLimiter = itemLimiter
             let downloader = RangeDownloader(
                 request: RemoteRequest(url: resource.finalURL, headers: resolved.request.headers),
                 resource: resource,
@@ -381,6 +419,7 @@ final class DownloadManager: ObservableObject, DownloadDispatching {
             handleFailure(id, error)
         }
         lastSample[id] = nil
+        itemLimiters[id] = nil
         save()
         schedule()
     }
@@ -560,6 +599,7 @@ final class DownloadManager: ObservableObject, DownloadDispatching {
         }
         addTransferred(transferred)
         pushSpeedSample(totalSpeed)
+        rebalance()
         // Checkpoint segment layout every ~5 s so a crash loses at most a few seconds.
         tickCount += 1
         if tickCount % 10 == 0 {
@@ -567,6 +607,18 @@ final class DownloadManager: ObservableObject, DownloadDispatching {
             save()
         }
         stopTimerIfIdle()
+    }
+
+    /// Splits bandwidth by priority and applies each download's own cap.
+    private func rebalance() {
+        let entries: [PriorityAllocator.Entry] = transfers.keys.compactMap { id in
+            guard itemLimiters[id] != nil, let i = index(id) else { return nil }
+            return .init(id: id, priority: items[i].priority, speed: items[i].speed,
+                         userCap: Double(items[i].speedLimitKB) * 1024)
+        }
+        guard !entries.isEmpty else { allocator.reset(); return }
+        let caps = allocator.update(entries)
+        for (id, cap) in caps { itemLimiters[id]?.retune(Int64(cap)) }
     }
 
     /// Re-evaluates sleep/App Nap state (e.g. after the user flips the setting).

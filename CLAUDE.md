@@ -33,7 +33,7 @@ Detail arsitektur: `ARCHITECTURE.md`. Ringkasan pengguna: `README.md`.
 - `Sources/mdl-bench`: CLI benchmark throughput/CPU. `Tests/DownloadCoreTests`: 43 tes (server range lokal).
 
 ## Cara kerja dari sesi Claude (penting)
-- Workspace Claude = Linux, **tidak bisa compile Swift**. Semua build/tes lewat GitHub Actions (macos-14).
+- Workspace Claude = Linux, **tidak bisa compile Swift**. Semua build/tes lewat GitHub Actions (macos-15; macos-14 sudah tidak didukung per Nov 2026).
 - Log Actions & artifact **tidak bisa diunduh** dari proxy. Workflow sengaja menulis hasil sebagai **annotations**
   (`gh api repos/rakitlab/wwwrap/check-runs/<job>/annotations`) — error compiler, hasil tes, smoke test.
 - Screenshot UI: step CI mem-push PNG ke branch `ci-screenshots` → `git fetch origin ci-screenshots`.
@@ -54,4 +54,10 @@ Detail arsitektur: `ARCHITECTURE.md`. Ringkasan pengguna: `README.md`.
 3. Kandidat fitur: Native Messaging host (Chromium), Safari Web Extension (butuh migrasi ke Xcode project),
    video grabber (yt-dlp), jadwal + tidurkan Mac, ambil semua link dari halaman, deteksi duplikat,
    ekstensi di Chrome Web Store — sudah diusulkan, belum diminta.
+3b. **Backlog dari feedback tester (Bilal, Okt 2026)** — sudah disetujui masuk backlog, belum dikerjakan:
+   - Link yang tidak tertangkap ekstensi: tangkap via `downloads.onCreated` + `Content-Disposition`
+     (bukan cuma klik link), drag-and-drop link ke ikon/jendela app.
+   - In-app browser (WKWebView + `WKDownload`, cookie/login ikut) — kerjakan setelah poin di atas.
+   - Batas: `blob:`, HLS/DASH, DRM tetap tidak bisa (wilayah video grabber).
+   - Torrent: tidak direncanakan.
 4. Branch sisa yang bisa dihapus pemilik: `probe-drive`, `perf-speed`, `engine-v2`, `drive-folders`.

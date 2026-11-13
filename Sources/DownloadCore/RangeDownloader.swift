@@ -34,6 +34,9 @@ public final class RangeDownloader: @unchecked Sendable {
         public var highWaterMark = 4 << 20
         /// Optional speed cap shared with other downloads (nil = unlimited).
         public var limiter: BandwidthLimiter?
+        /// Optional cap for this download only (priority share and/or the user's per-file limit).
+        /// Acquired before `limiter`, so a capped download never holds global budget while it waits.
+        public var itemLimiter: BandwidthLimiter?
 
         public init() {}
     }
@@ -235,6 +238,7 @@ public final class RangeDownloader: @unchecked Sendable {
                 }
                 let complete = scheduler.commit(claim.id, length: length)
                 // Holding the acknowledgement back lets the stream's backpressure slow the socket.
+                if let limiter = configuration.itemLimiter { try await limiter.acquire(data.count) }
                 if let limiter = configuration.limiter { try await limiter.acquire(data.count) }
                 stream.consumed(data.count)
                 if !complete, length == data.count, scheduler.consumeRetire() { throw RetireSignal() }
