@@ -1,4 +1,5 @@
 import AppKit
+import DownloadCore
 import SwiftUI
 
 enum SortOrder: String, CaseIterable, Identifiable {
