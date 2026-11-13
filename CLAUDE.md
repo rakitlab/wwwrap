@@ -1,10 +1,10 @@
 # wwwrap (dulu MacDownloader) — handoff for Claude
 
-Status per 18 Okt 2026. Pemilik: mubaroksn (berkomunikasi dalam bahasa Indonesia, santai; bukan engineer Swift — jelaskan hasil, bukan proses).
+Status per 13 Nov 2026. Pemilik: mubaroksn (berkomunikasi dalam bahasa Indonesia, santai; bukan engineer Swift — jelaskan hasil, bukan proses).
 
 ## Apa ini
 Download manager ala IDM untuk macOS. Native Swift/SwiftUI, SwiftPM (tanpa .xcodeproj), macOS 13+, universal.
-Repo: https://github.com/rakitlab/wwwrap (org perusahaan rakitlab; sebelumnya mubaroksn/wwwrap dan mubaroksn/MacDownloader — URL lama di-redirect GitHub, JANGAN buat repo baru bernama sama di akun lama) · Rilis terbaru: **v1.7.0**.
+Repo: https://github.com/rakitlab/wwwrap (org perusahaan rakitlab; sebelumnya mubaroksn/wwwrap dan mubaroksn/MacDownloader — URL lama di-redirect GitHub, JANGAN buat repo baru bernama sama di akun lama) · Rilis terbaru: **v1.8.0**.
 Detail arsitektur: `ARCHITECTURE.md`. Ringkasan pengguna: `README.md`.
 
 ## Yang sudah ada
@@ -30,6 +30,9 @@ Detail arsitektur: `ARCHITECTURE.md`. Ringkasan pengguna: `README.md`.
   `System/LegacyMigration.swift` menyalin defaults + downloads.json lama). Protokol ekstensi (`X-MacDL-Client`, port 9614)
   dan gecko id Firefox sengaja TIDAK diganti. Auto-lanjut saat internet putus: `Downloads/NetworkWatcher.swift`
   (`waitingForNetwork`, probe captive.apple.com — Starlink: Wi-Fi tetap "satisfied" walau uplink mati).
+- v1.8: prioritas per download (Tinggi/Normal/Rendah, 3:2:1) + batas kecepatan per file + "Mulai sekarang"
+  (menu baris). `PriorityAllocator` (relatif ke speed download teratas + probe/back-off; lihat ARCHITECTURE.md),
+  `itemLimiter` per download, `BandwidthLimiter.retune`. Antrean: prioritas tertinggi dulu, lalu terlama.
 - `Sources/mdl-bench`: CLI benchmark throughput/CPU. `Tests/DownloadCoreTests`: 43 tes (server range lokal).
 
 ## Cara kerja dari sesi Claude (penting)
