@@ -72,6 +72,21 @@ TCP window closes, so the cap holds on the wire. Changing the cap bumps a genera
 releases current waiters within 0.25 s. The app maps three modes (Penuh/Hemat/Senyap) to caps
 stored in UserDefaults.
 
+### Priority and per-download caps (1.8)
+
+Each running download also gets its own `BandwidthLimiter` (`Configuration.itemLimiter`), acquired
+*before* the global one so a held-back download never sits on global budget. Twice a second
+`DownloadManager.rebalance()` asks `PriorityAllocator` for each download's cap and applies it with
+`retune` (changes the rate without releasing waiters, so frequent retuning can't skip the cap).
+
+`PriorityAllocator`: weights high/normal/low = 3/2/1. Downloads of the highest priority present are
+never capped by priority; each lower one is capped at its weighted share of the budget plus what the
+others leave unused (so a slow server on the important download doesn't waste the line), moving 30 %
+toward the target per update, never below 64 KB/s. Budget = the global limit, or else the highest
+recent total speed (decaying, ~70 s half-life). Same priority everywhere → no priority caps. The
+user's per-file cap (`speedLimitKB`) always applies. The queue starts highest priority first, then
+oldest; "Mulai sekarang" starts a download beyond the concurrent-download setting.
+
 ## Localization
 
 Indonesian source text is the lookup key: `L("Batal")` returns the key itself in Indonesian

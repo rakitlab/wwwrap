@@ -95,6 +95,10 @@ struct DownloadItem: Identifiable, Codable, Equatable {
     var subdirectory: String?
     /// Failed because the connection dropped; resumed automatically once the internet is back.
     var waitingForNetwork = false
+    /// Bigger bandwidth share when running alongside others; started first from the queue.
+    var priority: DownloadPriority = .normal
+    /// The user's own cap for this download in KB/s; 0 = no cap.
+    var speedLimitKB = 0
 
     // Runtime-only values, not persisted.
     var speed: Double = 0
@@ -108,7 +112,7 @@ struct DownloadItem: Identifiable, Codable, Equatable {
         case id, url, fileName, category, status, totalBytes, downloadedBytes,
              supportsRanges, segments, destinationPath, errorMessage, addedAt,
              completedAt, headers, nameLocked, tempPath, validator, sourceURL, subdirectory,
-             waitingForNetwork
+             waitingForNetwork, priority, speedLimitKB
     }
 
     init(url: URL, fileName: String, category: FileCategory) {
@@ -139,6 +143,8 @@ struct DownloadItem: Identifiable, Codable, Equatable {
         sourceURL = try c.decodeIfPresent(URL.self, forKey: .sourceURL)
         subdirectory = try c.decodeIfPresent(String.self, forKey: .subdirectory)
         waitingForNetwork = try c.decodeIfPresent(Bool.self, forKey: .waitingForNetwork) ?? false
+        priority = try c.decodeIfPresent(DownloadPriority.self, forKey: .priority) ?? .normal
+        speedLimitKB = try c.decodeIfPresent(Int.self, forKey: .speedLimitKB) ?? 0
     }
 
     /// Failed for good (not just waiting for the connection to come back).
@@ -152,6 +158,33 @@ struct DownloadItem: Identifiable, Codable, Equatable {
     var eta: TimeInterval? {
         guard status == .downloading, speed > 1, totalBytes > 0 else { return nil }
         return Double(totalBytes - downloadedBytes) / speed
+    }
+}
+
+extension DownloadPriority {
+    var label: String {
+        switch self {
+        case .high: return L("Tinggi")
+        case .normal: return L("Normal")
+        case .low: return L("Rendah")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .high: return "arrow.up"
+        case .normal: return "equal"
+        case .low: return "arrow.down"
+        }
+    }
+}
+
+/// Per-download speed caps offered in the row menu (KB/s; 0 = no cap).
+enum ItemSpeedLimit {
+    static let presetsKB = [256, 512, 1024, 2 * 1024, 5 * 1024, 10 * 1024]
+
+    static func label(_ kb: Int) -> String {
+        kb > 0 ? Format.bytes(Int64(kb) * 1024) + "/s" : L("Tanpa batas")
     }
 }
 

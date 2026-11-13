@@ -333,11 +333,16 @@ struct FileRow: View {
                         .foregroundStyle(Theme.textSecondary)
                 )
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.fileName)
-                    .font(.system(size: 13.5, weight: .medium))
-                    .foregroundStyle(Theme.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HStack(spacing: 6) {
+                    Text(item.fileName)
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(Theme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if item.status != .completed {
+                        ItemTuningBadges(item: item)
+                    }
+                }
                 Group {
                     if item.status == .failed, let error = item.errorMessage {
                         Text(error).foregroundStyle(item.waitingForNetwork ? Theme.orange : Theme.red)
@@ -421,6 +426,37 @@ struct FileRow: View {
     }
 }
 
+/// Small marks next to the file name: non-normal priority and the download's own speed cap.
+struct ItemTuningBadges: View {
+    let item: DownloadItem
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if item.priority != .normal {
+                badge(Image(systemName: item.priority.symbol).font(.system(size: 9, weight: .bold)),
+                      help: L("Prioritas: %@", item.priority.label))
+            }
+            if item.speedLimitKB > 0 {
+                badge(HStack(spacing: 3) {
+                    Image(systemName: "gauge.with.dots.needle.33percent").font(.system(size: 9, weight: .semibold))
+                    Text(ItemSpeedLimit.label(item.speedLimitKB)).font(.system(size: 10.5, weight: .medium))
+                }, help: L("Batas kecepatan file ini"))
+            }
+        }
+        .fixedSize()
+    }
+
+    private func badge<Content: View>(_ content: Content, help: String) -> some View {
+        content
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 5)
+            .frame(height: 17)
+            .background(Capsule().fill(Theme.canvas))
+            .overlay(Capsule().strokeBorder(Theme.border))
+            .help(help)
+    }
+}
+
 struct RowMenuItems: View {
     @EnvironmentObject private var manager: DownloadManager
     let ids: Set<UUID>
@@ -440,6 +476,30 @@ struct RowMenuItems: View {
         }
         if items.contains(where: { [.paused, .failed].contains($0.status) }) {
             Button(L("Ulang dari awal")) { manager.restart(ids) }
+        }
+        let unfinished = items.filter { $0.status != .completed }
+        if unfinished.contains(where: { [.queued, .paused, .failed].contains($0.status) }) {
+            Button(L("Mulai sekarang")) { manager.startNow(ids) }
+        }
+        if !unfinished.isEmpty {
+            Divider()
+            let current = Set(unfinished.map(\.priority))
+            Menu(L("Prioritas")) {
+                ForEach(DownloadPriority.allCases.reversed(), id: \.self) { p in
+                    Toggle(isOn: Binding(get: { current == [p] },
+                                         set: { _ in manager.setPriority(p, for: ids) })) {
+                        Label(p.label, systemImage: p.symbol)
+                    }
+                }
+            }
+            let limits = Set(unfinished.map(\.speedLimitKB))
+            Menu(L("Batas kecepatan")) {
+                ForEach([0] + ItemSpeedLimit.presetsKB, id: \.self) { kb in
+                    Toggle(ItemSpeedLimit.label(kb),
+                           isOn: Binding(get: { limits == [kb] },
+                                         set: { _ in manager.setSpeedLimit(kb: kb, for: ids) }))
+                }
+            }
         }
         Divider()
         Button(L("Salin link")) {

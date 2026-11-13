@@ -54,4 +54,10 @@ Detail arsitektur: `ARCHITECTURE.md`. Ringkasan pengguna: `README.md`.
 3. Kandidat fitur: Native Messaging host (Chromium), Safari Web Extension (butuh migrasi ke Xcode project),
    video grabber (yt-dlp), jadwal + tidurkan Mac, ambil semua link dari halaman, deteksi duplikat,
    ekstensi di Chrome Web Store — sudah diusulkan, belum diminta.
+3b. **Backlog dari feedback tester (Bilal, Okt 2026)** — sudah disetujui masuk backlog, belum dikerjakan:
+   - Link yang tidak tertangkap ekstensi: tangkap via `downloads.onCreated` + `Content-Disposition`
+     (bukan cuma klik link), drag-and-drop link ke ikon/jendela app.
+   - In-app browser (WKWebView + `WKDownload`, cookie/login ikut) — kerjakan setelah poin di atas.
+   - Batas: `blob:`, HLS/DASH, DRM tetap tidak bisa (wilayah video grabber).
+   - Torrent: tidak direncanakan.
 4. Branch sisa yang bisa dihapus pemilik: `probe-drive`, `perf-speed`, `engine-v2`, `drive-folders`.
